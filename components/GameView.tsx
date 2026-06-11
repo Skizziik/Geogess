@@ -12,6 +12,7 @@ import {
   scoreForDistance,
 } from "@/lib/geo";
 import { playerColor } from "@/lib/colors";
+import { submitScore } from "@/lib/leaderboard";
 import type {
   GameLocation,
   GameSettings,
@@ -187,6 +188,19 @@ export default function GameView({
   }
 
   const guessedCount = players.filter((p) => guessFor(p.id, round)).length;
+
+  // Record the finished game on the leaderboard, once per match.
+  const scoreSubmittedRef = useRef(false);
+  useEffect(() => {
+    if (phase !== "final" || scoreSubmittedRef.current) return;
+    scoreSubmittedRef.current = true;
+    void submitScore({
+      nick: me.nick,
+      total: myTotal,
+      rounds: settings.rounds,
+      mode: multiplayer ? "multi" : "solo",
+    });
+  }, [phase, me.nick, myTotal, settings.rounds, multiplayer]);
 
   // Stable reference across countdown ticks so the result map doesn't
   // redraw (and reset its viewport) 4 times a second.
