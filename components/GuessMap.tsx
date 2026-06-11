@@ -1,10 +1,20 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import { loadGoogleMaps } from "@/lib/maps";
-import { MAP_STYLE, guessPinIcon } from "@/lib/mapStyle";
+import { useEffect, useRef, useState } from "react";
+import type { Map as LeafletMap, CircleMarker } from "leaflet";
+import "leaflet/dist/leaflet.css";
+import { playerColor, INK } from "@/lib/colors";
 import { formatCoord } from "@/lib/geo";
 import type { LatLng } from "@/lib/types";
+
+export const TILE_URL =
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png";
+export const TILE_ATTRIBUTION =
+  '&copy; <a href="https://www.openstreetmap.org/copyright">OSM</a> &copy; <a href="https://carto.com/attributions">CARTO</a>';
+
+function wrapLng(lng: number): number {
+  return ((((lng + 180) % 360) + 360) % 360) - 180;
+}
 
 type Props = {
   round: number;
@@ -15,77 +25,69 @@ type Props = {
 
 export default function GuessMap({ round, hue, disabled, onSubmit }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<google.maps.Map | null>(null);
-  const markerRef = useRef<google.maps.Marker | null>(null);
-  const googleRef = useRef<typeof google | null>(null);
+  const mapRef = useRef<LeafletMap | null>(null);
+  const markerRef = useRef<CircleMarker | null>(null);
   const [pin, setPin] = useState<LatLng | null>(null);
   const [expanded, setExpanded] = useState(false);
   const [locked, setLocked] = useState(false);
 
-  const placePin = useCallback(
-    (point: LatLng) => {
-      const g = googleRef.current;
-      const map = mapRef.current;
-      if (!g || !map) return;
-      if (!markerRef.current) {
-        markerRef.current = new g.maps.Marker({
-          map,
-          position: point,
-          icon: guessPinIcon(g, hue),
-        });
-      } else {
-        markerRef.current.setPosition(point);
-        markerRef.current.setMap(map);
-      }
-      setPin(point);
-    },
-    [hue]
-  );
-
   useEffect(() => {
     let cancelled = false;
-    loadGoogleMaps().then((g) => {
+    void import("leaflet").then(({ default: L }) => {
       if (cancelled || !containerRef.current || mapRef.current) return;
-      googleRef.current = g;
-      const map = new g.maps.Map(containerRef.current, {
-        center: { lat: 18, lng: 8 },
+      const map = L.map(containerRef.current, {
+        center: [18, 8],
         zoom: 1,
-        styles: MAP_STYLE,
-        backgroundColor: "#0a0d12",
-        disableDefaultUI: true,
-        zoomControl: true,
-        gestureHandling: "greedy",
         minZoom: 1,
-        draggableCursor: "crosshair",
-        keyboardShortcuts: false,
+        zoomControl: true,
+        worldCopyJump: true,
+        attributionControl: true,
+      });
+      L.tileLayer(TILE_URL, {
+        attribution: TILE_ATTRIBUTION,
+        subdomains: "abcd",
+        maxZoom: 19,
+      }).addTo(map);
+      map.on("click", (e) => {
+        const point = { lat: e.latlng.lat, lng: wrapLng(e.latlng.lng) };
+        if (!markerRef.current) {
+          markerRef.current = L.circleMarker(e.latlng, {
+            radius: 8,
+            color: INK,
+            weight: 2,
+            fillColor: playerColor(hue),
+            fillOpacity: 1,
+          }).addTo(map);
+        } else {
+          markerRef.current.setLatLng(e.latlng);
+          markerRef.current.addTo(map);
+        }
+        setPin(point);
       });
       mapRef.current = map;
-      map.addListener("click", (e: google.maps.MapMouseEvent) => {
-        if (!e.latLng) return;
-        placePin({ lat: e.latLng.lat(), lng: e.latLng.lng() });
-      });
     });
     return () => {
       cancelled = true;
+      mapRef.current?.remove();
+      mapRef.current = null;
+      markerRef.current = null;
     };
-  }, [placePin]);
+    // The map is created once; hue only affects new pins.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // New round: clear the pin and zoom back out.
   useEffect(() => {
     setPin(null);
-    markerRef.current?.setMap(null);
-    mapRef.current?.setCenter({ lat: 18, lng: 8 });
-    mapRef.current?.setZoom(1);
+    markerRef.current?.remove();
+    mapRef.current?.setView([18, 8], 1);
   }, [round]);
 
   // Tell the map its viewport changed after the expand/collapse transition.
   useEffect(() => {
-    const t = setTimeout(() => {
-      const g = googleRef.current;
-      if (g && mapRef.current) g.maps.event.trigger(mapRef.current, "resize");
-    }, 320);
+    const t = setTimeout(() => mapRef.current?.invalidateSize(), 320);
     return () => clearTimeout(t);
-  }, [expanded]);
+  }, [expanded, locked]);
 
   const open = expanded || locked;
 
@@ -113,8 +115,8 @@ export default function GuessMap({ round, hue, disabled, onSubmit }: Props) {
           </span>
         )}
       </div>
-      <div className="ticks relative flex-1 border border-line-strong">
-        <div ref={containerRef} className="absolute inset-0" />
+      <div className="ticks relative flex-1 border border-line-strong bg-ink-900">
+        <div ref={containerRef} className="absolute inset-0 cursor-crosshair" />
       </div>
       <button
         onClick={() => pin && onSubmit(pin)}

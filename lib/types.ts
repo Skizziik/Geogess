@@ -1,5 +1,8 @@
 export type LatLng = { lat: number; lng: number };
 
+/** A playable round location: coordinates plus the resolved panorama id. */
+export type GameLocation = LatLng & { panoId?: string };
+
 export type MoveMode = "move" | "no-move" | "nmpz";
 
 export type GameSettings = {
@@ -45,7 +48,7 @@ export type RoomMeta = {
 };
 
 export type StartPayload = {
-  locations: LatLng[];
+  locations: GameLocation[];
   settings: GameSettings;
   /** Epoch ms when round 1 opens (gives everyone a synced countdown). */
   startAt: number;

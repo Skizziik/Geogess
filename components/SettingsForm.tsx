@@ -12,8 +12,7 @@ const TIMER_OPTIONS: { value: number | null; label: string }[] = [
 ];
 const MOVE_OPTIONS: { value: MoveMode; label: string; hint: string }[] = [
   { value: "move", label: "Move", hint: "Walk, pan and zoom freely" },
-  { value: "no-move", label: "No move", hint: "Look around, but stay put" },
-  { value: "nmpz", label: "NMPZ", hint: "No move, no pan, no zoom" },
+  { value: "nmpz", label: "NMPZ", hint: "Frozen view — no move, no pan, no zoom" },
 ];
 
 type Props = {

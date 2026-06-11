@@ -1,101 +1,70 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
-import { loadGoogleMaps } from "@/lib/maps";
-import type { LatLng, MoveMode } from "@/lib/types";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { panoEmbedSrc, panoHeading } from "@/lib/pano";
+import type { GameLocation, MoveMode } from "@/lib/types";
 
 type Props = {
-  location: LatLng;
+  location: GameLocation;
   moveMode: MoveMode;
 };
 
+/**
+ * Keyless Street View: Google's public embed iframe.
+ * The iframe is taller than the container and shifted up so the
+ * address card in the top-left corner stays out of sight.
+ */
+const OVERFLOW_PX = 300;
+const SHIFT_PX = 285;
+
 export default function StreetViewPane({ location, moveMode }: Props) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const panoRef = useRef<google.maps.StreetViewPanorama | null>(null);
-  const startRef = useRef<{ position: LatLng; heading: number }>({
-    position: location,
-    heading: 0,
-  });
-  const [ready, setReady] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
+  const [loaded, setLoaded] = useState(false);
 
-  const canMove = moveMode === "move";
-  const frozen = moveMode === "nmpz";
+  const src = useMemo(
+    () => panoEmbedSrc(location, panoHeading(location)),
+    [location]
+  );
 
   useEffect(() => {
-    let cancelled = false;
-    loadGoogleMaps()
-      .then((g) => {
-        if (cancelled || !containerRef.current) return;
-        const heading = Math.floor(Math.random() * 360);
-        startRef.current = { position: location, heading };
-        const pano = new g.maps.StreetViewPanorama(containerRef.current, {
-          position: location,
-          pov: { heading, pitch: 0 },
-          zoom: frozen ? 0.6 : 1,
-          addressControl: false,
-          showRoadLabels: false,
-          fullscreenControl: false,
-          motionTracking: false,
-          motionTrackingControl: false,
-          panControl: false,
-          zoomControl: !frozen,
-          scrollwheel: !frozen,
-          disableDoubleClickZoom: frozen,
-          linksControl: canMove,
-          clickToGo: canMove,
-          enableCloseButton: false,
-        });
-        panoRef.current = pano;
-        setReady(true);
-      })
-      .catch((e: Error) => setError(e.message));
-    return () => {
-      cancelled = true;
-      panoRef.current = null;
-    };
-    // The panorama is created once; location changes are handled below.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    const pano = panoRef.current;
-    if (!pano || !ready) return;
-    const heading = Math.floor(Math.random() * 360);
-    startRef.current = { position: location, heading };
-    pano.setPosition(location);
-    pano.setPov({ heading, pitch: 0 });
-    pano.setZoom(frozen ? 0.6 : 1);
-  }, [location, ready, frozen]);
+    setLoaded(false);
+  }, [src]);
 
   function returnToStart() {
-    const pano = panoRef.current;
-    if (!pano) return;
-    pano.setPosition(startRef.current.position);
-    pano.setPov({ heading: startRef.current.heading, pitch: 0 });
+    // Re-assigning src reloads the iframe at the original panorama.
+    if (iframeRef.current) {
+      setLoaded(false);
+      iframeRef.current.src = src;
+    }
   }
 
-  if (error) {
-    return (
-      <div className="absolute inset-0 grid place-items-center bg-ink-950 p-8 text-center">
-        <div className="max-w-md">
-          <p className="label-caps mb-3">Street View unavailable</p>
-          <p className="text-sm text-paper-dim">{error}</p>
-        </div>
-      </div>
-    );
-  }
+  const frozen = moveMode === "nmpz";
 
   return (
-    <div className="absolute inset-0">
-      <div ref={containerRef} className="absolute inset-0" />
+    <div className="absolute inset-0 overflow-hidden bg-ink-950">
+      <iframe
+        ref={iframeRef}
+        src={src}
+        onLoad={() => setLoaded(true)}
+        referrerPolicy="no-referrer-when-downgrade"
+        allow="accelerometer; gyroscope"
+        className={`absolute left-0 w-full border-0 transition-opacity duration-300 ${
+          loaded ? "opacity-100" : "opacity-0"
+        }`}
+        style={{
+          top: -SHIFT_PX,
+          height: `calc(100% + ${OVERFLOW_PX}px)`,
+          backgroundColor: "#07090c",
+        }}
+        title="Street view panorama"
+      />
       {frozen && <div className="absolute inset-0 z-10" aria-hidden />}
-      {!ready && (
+      {!loaded && (
         <div className="absolute inset-0 grid place-items-center bg-ink-950">
           <p className="label-caps pulse-dot">Dropping you in…</p>
         </div>
       )}
-      {canMove && ready && (
+      {!frozen && loaded && (
         <button
           onClick={returnToStart}
           className="btn absolute left-4 top-4 z-20 bg-ink-950/80 !px-4 !py-2 text-xs backdrop-blur"

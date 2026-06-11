@@ -6,8 +6,7 @@ import Link from "next/link";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import GameView from "@/components/GameView";
 import SettingsForm from "@/components/SettingsForm";
-import { playerColor } from "@/lib/mapStyle";
-import { loadGoogleMaps } from "@/lib/maps";
+import { playerColor } from "@/lib/colors";
 import { pickLocations } from "@/lib/locations";
 import { getPlayer } from "@/lib/player";
 import {
@@ -192,8 +191,7 @@ export default function RoomClient() {
     setLaunching(true);
     setError(null);
     try {
-      const g = await loadGoogleMaps();
-      const locations = await pickLocations(g, settings.rounds);
+      const locations = await pickLocations(settings.rounds);
       const payload: StartPayload = {
         locations,
         settings,

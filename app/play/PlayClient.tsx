@@ -5,10 +5,14 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import GameView from "@/components/GameView";
 import SettingsForm from "@/components/SettingsForm";
-import { hasMapsKey, loadGoogleMaps } from "@/lib/maps";
 import { pickLocations } from "@/lib/locations";
 import { getPlayer } from "@/lib/player";
-import { DEFAULT_SETTINGS, type GameSettings, type LatLng, type PlayerInfo } from "@/lib/types";
+import {
+  DEFAULT_SETTINGS,
+  type GameLocation,
+  type GameSettings,
+  type PlayerInfo,
+} from "@/lib/types";
 
 type Stage = "setup" | "loading" | "play";
 
@@ -17,7 +21,7 @@ export default function PlayClient() {
   const [me, setMe] = useState<PlayerInfo | null>(null);
   const [stage, setStage] = useState<Stage>("setup");
   const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
-  const [locations, setLocations] = useState<LatLng[]>([]);
+  const [locations, setLocations] = useState<GameLocation[]>([]);
   const [gameKey, setGameKey] = useState(0);
   const [error, setError] = useState<string | null>(null);
 
@@ -29,8 +33,7 @@ export default function PlayClient() {
     setError(null);
     setStage("loading");
     try {
-      const g = await loadGoogleMaps();
-      const locs = await pickLocations(g, s.rounds);
+      const locs = await pickLocations(s.rounds);
       setLocations(locs);
       setGameKey((k) => k + 1);
       setStage("play");
@@ -81,12 +84,6 @@ export default function PlayClient() {
 
             <SettingsForm value={settings} onChange={setSettings} />
 
-            {!hasMapsKey() && (
-              <p className="mt-5 border border-signal/40 bg-signal/10 p-3 text-xs text-signal">
-                NEXT_PUBLIC_GOOGLE_MAPS_API_KEY is not configured — the game
-                cannot load Street View. See the README for setup.
-              </p>
-            )}
             {error && (
               <p className="mt-5 border border-signal/40 bg-signal/10 p-3 text-xs text-signal">
                 {error}

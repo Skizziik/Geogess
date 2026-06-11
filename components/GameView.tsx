@@ -11,15 +11,21 @@ import {
   haversineKm,
   scoreForDistance,
 } from "@/lib/geo";
-import { playerColor } from "@/lib/mapStyle";
-import type { GameSettings, Guess, LatLng, PlayerInfo } from "@/lib/types";
+import { playerColor } from "@/lib/colors";
+import type {
+  GameLocation,
+  GameSettings,
+  Guess,
+  LatLng,
+  PlayerInfo,
+} from "@/lib/types";
 
 const RESULT_SECONDS = 12;
 
 type Phase = "intro" | "round" | "result" | "final";
 
 type Props = {
-  locations: LatLng[];
+  locations: GameLocation[];
   settings: GameSettings;
   /** Live participant list — shrinks in multiplayer when someone leaves. */
   players: PlayerInfo[];

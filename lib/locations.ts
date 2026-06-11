@@ -1,8 +1,9 @@
-import type { LatLng } from "./types";
+import { findPano } from "./pano";
+import type { GameLocation, LatLng } from "./types";
 
 /**
  * Seed pool of coordinates in areas with reliable Street View coverage.
- * Each pick gets a random jitter and is snapped to the nearest outdoor
+ * Each pick gets a random jitter and is snapped to the nearest official
  * panorama at runtime, so games don't repeat exact spots.
  */
 const POOL: [number, number][] = [
@@ -129,37 +130,25 @@ function randomSeed(used: Set<number>): { index: number; point: LatLng } {
   };
 }
 
-/** Pick `count` locations snapped to real outdoor panoramas. */
-export async function pickLocations(
-  g: typeof google,
-  count: number
-): Promise<LatLng[]> {
-  const sv = new g.maps.StreetViewService();
-  const chosen: LatLng[] = [];
+/** Pick `count` locations snapped to real panoramas. No API key needed. */
+export async function pickLocations(count: number): Promise<GameLocation[]> {
+  const chosen: GameLocation[] = [];
   const used = new Set<number>();
   let attempts = 0;
 
   while (chosen.length < count && attempts < count * 20) {
     attempts++;
     const { index, point } = randomSeed(used);
-    try {
-      const { data } = await sv.getPanorama({
-        location: point,
-        radius: 5000,
-        source: g.maps.StreetViewSource.OUTDOOR,
-        preference: g.maps.StreetViewPreference.BEST,
-      });
-      const pos = data.location?.latLng;
-      if (!pos) continue;
-      used.add(index);
-      chosen.push({ lat: pos.lat(), lng: pos.lng() });
-    } catch {
-      // No panorama near this seed — try another one.
-    }
+    const pano = await findPano(point.lat, point.lng);
+    if (!pano) continue; // No panorama near this seed — try another one.
+    used.add(index);
+    chosen.push(pano);
   }
 
   if (chosen.length < count) {
-    throw new Error("Could not find enough Street View locations");
+    throw new Error(
+      "Could not find enough Street View locations — check your connection and try again"
+    );
   }
   return chosen;
 }
