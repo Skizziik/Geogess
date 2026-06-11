@@ -259,3 +259,8 @@ body {
 .leaflet-dragging .leaflet-container.leaflet-grab {
   cursor: crosshair;
 }
+
+/* Leaflet's default #ddd canvas shows through around/under the dark tiles. */
+.leaflet-container {
+  background: var(--ink-950) !important;
+}

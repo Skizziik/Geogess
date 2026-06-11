@@ -37,6 +37,7 @@ export default function ResultMap({ actual, markers }: Props) {
         mapRef.current = L.map(containerRef.current, {
           center: [actual.lat, actual.lng],
           zoom: 3,
+          minZoom: 2,
           zoomControl: true,
           worldCopyJump: true,
         });
