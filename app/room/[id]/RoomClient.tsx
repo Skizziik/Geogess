@@ -50,7 +50,7 @@ export default function RoomClient() {
 
   const channelRef = useRef<RealtimeChannel | null>(null);
   const lobbyRef = useRef<RealtimeChannel | null>(null);
-  const sawHostRef = useRef(false);
+  const [sawHost, setSawHost] = useState(false);
   const hostStateRef = useRef({ roomName: "", settings: DEFAULT_SETTINGS, status: "waiting" as RoomStatus });
 
   // Resolve identity + host role (the creator stashed config in sessionStorage).
@@ -113,7 +113,7 @@ export default function RoomClient() {
       const state = ch.presenceState<RoomPresence>();
       const list = Object.values(state).flat() as RoomPresence[];
       setMembers(list);
-      if (list.some((m) => m.isHost)) sawHostRef.current = true;
+      if (list.some((m) => m.isHost)) setSawHost(true);
     });
     ch.on("broadcast", { event: "start" }, ({ payload }) => {
       setRemoteGuesses([]);
@@ -185,7 +185,7 @@ export default function RoomClient() {
   }, [isHost, roomName, settings, status, trackPresence]);
 
   const hostGone =
-    !isHost && connected && sawHostRef.current && !hostPresence && status === "waiting";
+    !isHost && connected && sawHost && !hostPresence && status === "waiting";
 
   async function launchGame() {
     if (!me || launching) return;

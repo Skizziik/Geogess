@@ -22,7 +22,10 @@ export default function Hud({ round, totalRounds, totalScore, deadline, onExpire
   const [now, setNow] = useState(() => Date.now());
   const expiredRef = useRef(false);
   const onExpireRef = useRef(onExpire);
-  onExpireRef.current = onExpire;
+
+  useEffect(() => {
+    onExpireRef.current = onExpire;
+  }, [onExpire]);
 
   useEffect(() => {
     expiredRef.current = false;
