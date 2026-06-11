@@ -40,6 +40,8 @@ type Props = {
   exitLabel: string;
   onRestart?: () => void;
   restartLabel?: string;
+  onSecondary?: () => void;
+  secondaryLabel?: string;
 };
 
 export default function GameView({
@@ -55,6 +57,8 @@ export default function GameView({
   exitLabel,
   onRestart,
   restartLabel,
+  onSecondary,
+  secondaryLabel,
 }: Props) {
   const [phase, setPhase] = useState<Phase>(() =>
     startAt && startAt > Date.now() ? "intro" : "round"
@@ -265,10 +269,15 @@ export default function GameView({
             ))}
           </div>
 
-          <div className="fadeup flex justify-center gap-3">
+          <div className="fadeup flex flex-wrap justify-center gap-3">
             {onRestart && (
               <button onClick={onRestart} className="btn btn-primary">
                 {restartLabel ?? "Play again"}
+              </button>
+            )}
+            {onSecondary && (
+              <button onClick={onSecondary} className="btn">
+                {secondaryLabel}
               </button>
             )}
             <button onClick={onExit} className="btn">

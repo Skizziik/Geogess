@@ -247,8 +247,12 @@ export default function RoomClient() {
           }
           onExit={() => router.push("/rooms")}
           exitLabel="Leave room"
-          onRestart={backToRoom}
-          restartLabel="Back to room"
+          onRestart={isHost ? () => void launchGame() : backToRoom}
+          restartLabel={
+            isHost ? (launching ? "Charting locations…" : "Play again") : "Back to room"
+          }
+          onSecondary={isHost ? backToRoom : undefined}
+          secondaryLabel="Back to room"
         />
       );
     }
