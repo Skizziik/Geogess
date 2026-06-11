@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import SettingsForm from "@/components/SettingsForm";
-import { getSupabase, multiplayerConfigured, LOBBY_CHANNEL } from "@/lib/supabase";
+import { multiplayerConfigured } from "@/lib/supabase";
+import { watchLobby } from "@/lib/lobby";
 import { getPlayer, savePlayer, makeRoomId } from "@/lib/player";
 import {
   DEFAULT_SETTINGS,
@@ -34,22 +35,10 @@ export default function RoomsClient() {
   // Watch the lobby: every open room is a presence entry tracked by its host.
   useEffect(() => {
     if (!configured) return;
-    const supabase = getSupabase();
-    const channel = supabase.channel(LOBBY_CHANNEL);
-    channel.on("presence", { event: "sync" }, () => {
-      const state = channel.presenceState<RoomMeta>();
-      const list = Object.values(state)
-        .flat()
-        .filter((r) => r.id && r.name)
-        .sort((a, b) => b.createdAt - a.createdAt);
-      setRooms(list as RoomMeta[]);
+    return watchLobby((list, joined) => {
+      setRooms(list);
+      setConnected(joined);
     });
-    channel.subscribe((status) => {
-      if (status === "SUBSCRIBED") setConnected(true);
-    });
-    return () => {
-      supabase.removeChannel(channel);
-    };
   }, [configured]);
 
   function commitNick() {

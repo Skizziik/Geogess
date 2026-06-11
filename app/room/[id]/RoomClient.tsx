@@ -9,20 +9,20 @@ import SettingsForm from "@/components/SettingsForm";
 import { playerColor } from "@/lib/colors";
 import { pickLocations } from "@/lib/locations";
 import { getPlayer } from "@/lib/player";
+import { advertiseRoom, withdrawRoom } from "@/lib/lobby";
 import {
   getSupabase,
   multiplayerConfigured,
   roomChannelName,
-  LOBBY_CHANNEL,
 } from "@/lib/supabase";
 import {
   DEFAULT_SETTINGS,
   type GameSettings,
   type Guess,
   type PlayerInfo,
+  type RoomConfig,
   type RoomMeta,
   type RoomPresence,
-  type RoomStatus,
   type StartPayload,
 } from "@/lib/types";
 
@@ -35,12 +35,15 @@ export default function RoomClient() {
 
   const [me, setMe] = useState<PlayerInfo | null>(null);
   const [isHost, setIsHost] = useState(false);
-  const [roomName, setRoomName] = useState("");
-  const [settings, setSettings] = useState<GameSettings>(DEFAULT_SETTINGS);
+  const [config, setConfig] = useState<RoomConfig>({
+    roomName: "",
+    settings: DEFAULT_SETTINGS,
+    status: "waiting",
+  });
   const [createdAt] = useState(() => Date.now());
-  const [status, setStatus] = useState<RoomStatus>("waiting");
   const [members, setMembers] = useState<RoomPresence[]>([]);
   const [connected, setConnected] = useState(false);
+  const [sawHost, setSawHost] = useState(false);
   const [start, setStart] = useState<StartPayload | null>(null);
   const [remoteGuesses, setRemoteGuesses] = useState<Guess[]>([]);
   const [launching, setLaunching] = useState(false);
@@ -48,9 +51,15 @@ export default function RoomClient() {
   const [copied, setCopied] = useState(false);
 
   const channelRef = useRef<RealtimeChannel | null>(null);
-  const lobbyRef = useRef<RealtimeChannel | null>(null);
-  const [sawHost, setSawHost] = useState(false);
-  const hostStateRef = useRef({ roomName: "", settings: DEFAULT_SETTINGS, status: "waiting" as RoomStatus });
+  const isHostRef = useRef(false);
+  const configRef = useRef(config);
+
+  useEffect(() => {
+    isHostRef.current = isHost;
+  }, [isHost]);
+  useEffect(() => {
+    configRef.current = config;
+  }, [config]);
 
   // Resolve identity + host role (the creator stashed config in sessionStorage).
   useEffect(() => {
@@ -61,45 +70,22 @@ export default function RoomClient() {
       try {
         const cfg = JSON.parse(raw) as { name: string; settings: GameSettings };
         setIsHost(true);
-        setRoomName(cfg.name);
-        setSettings(cfg.settings);
-        hostStateRef.current = { roomName: cfg.name, settings: cfg.settings, status: "waiting" };
+        isHostRef.current = true;
+        setConfig({ roomName: cfg.name, settings: cfg.settings, status: "waiting" });
       } catch {
         sessionStorage.removeItem(`geogess:create:${roomId}`);
       }
     }
   }, [roomId]);
 
-  const hostPresence = useMemo(
-    () => members.find((m) => m.isHost && m.id !== me?.id),
-    [members, me?.id]
-  );
-
-  // Guests mirror the host's room config.
-  useEffect(() => {
-    if (isHost || !hostPresence) return;
-    if (hostPresence.roomName) setRoomName(hostPresence.roomName);
-    if (hostPresence.settings) setSettings(hostPresence.settings);
-    if (hostPresence.status) setStatus(hostPresence.status);
-  }, [isHost, hostPresence]);
-
-  const trackPresence = useCallback(async () => {
+  /** Host → everyone: current room name, settings and status. */
+  const sendConfig = useCallback(() => {
     const ch = channelRef.current;
-    if (!ch || !me) return;
-    const payload: RoomPresence = isHost
-      ? {
-          ...me,
-          isHost: true,
-          roomName: hostStateRef.current.roomName,
-          settings: hostStateRef.current.settings,
-          status: hostStateRef.current.status,
-          createdAt,
-        }
-      : { ...me, isHost: false };
-    await ch.track(payload);
-  }, [me, isHost, createdAt]);
+    if (!isHostRef.current || ch?.state !== "joined") return;
+    void ch.send({ type: "broadcast", event: "config", payload: configRef.current });
+  }, []);
 
-  // Join the room channel.
+  // Join the room channel. Presence payload is static — never re-tracked.
   useEffect(() => {
     if (!me || !multiplayerConfigured()) return;
     const supabase = getSupabase();
@@ -110,27 +96,40 @@ export default function RoomClient() {
 
     ch.on("presence", { event: "sync" }, () => {
       const state = ch.presenceState<RoomPresence>();
-      const list = Object.values(state).flat() as RoomPresence[];
+      const flat = Object.values(state).flat() as RoomPresence[];
+      const seen = new Set<string>();
+      const list = flat.filter((m) => {
+        if (!m.id || seen.has(m.id)) return false;
+        seen.add(m.id);
+        return true;
+      });
       setMembers(list);
       if (list.some((m) => m.isHost)) setSawHost(true);
+      // A newcomer appeared — make sure they learn the room config.
+      sendConfig();
+    });
+    ch.on("broadcast", { event: "config" }, ({ payload }) => {
+      if (isHostRef.current) return;
+      const cfg = payload as RoomConfig;
+      setConfig(cfg);
+      if (cfg.status === "waiting") {
+        setStart(null);
+        setRemoteGuesses([]);
+      }
     });
     ch.on("broadcast", { event: "start" }, ({ payload }) => {
       setRemoteGuesses([]);
       setStart(payload as StartPayload);
-      setStatus("playing");
+      setConfig((c) => ({ ...c, status: "playing" }));
     });
     ch.on("broadcast", { event: "guess" }, ({ payload }) => {
       setRemoteGuesses((prev) => [...prev, payload as Guess]);
     });
-    ch.on("broadcast", { event: "lobby-return" }, () => {
-      setStatus("waiting");
-      setStart(null);
-      setRemoteGuesses([]);
-    });
     ch.subscribe(async (s) => {
       if (s === "SUBSCRIBED") {
         setConnected(true);
-        await trackPresence();
+        await ch.track({ ...me, isHost: isHostRef.current, createdAt });
+        sendConfig();
       }
     });
 
@@ -141,71 +140,54 @@ export default function RoomClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [me, roomId]);
 
-  // Host: advertise the room in the public lobby and keep it fresh.
+  // Host: keep the lobby advertisement and guests' config in sync.
   useEffect(() => {
-    if (!isHost || !me || !multiplayerConfigured()) return;
-    const supabase = getSupabase();
-    if (!lobbyRef.current) {
-      lobbyRef.current = supabase.channel(LOBBY_CHANNEL, {
-        config: { presence: { key: roomId } },
-      });
-      lobbyRef.current.subscribe();
-    }
-    const lobby = lobbyRef.current;
+    if (!isHost || !me) return;
     const meta: RoomMeta = {
       id: roomId,
-      name: roomName || `${me.nick}'s room`,
+      name: config.roomName || `${me.nick}'s room`,
       hostNick: me.nick,
       players: Math.max(1, members.length),
-      settings,
-      status,
+      settings: config.settings,
+      status: config.status,
       createdAt,
     };
     const t = setTimeout(() => {
-      if (lobby.state === "joined") void lobby.track(meta);
-    }, 300);
+      advertiseRoom(meta);
+      sendConfig();
+    }, 200);
     return () => clearTimeout(t);
-  }, [isHost, me, roomId, roomName, settings, status, members.length, createdAt]);
+  }, [isHost, me, roomId, config, members.length, createdAt, sendConfig]);
 
-  useEffect(() => {
-    return () => {
-      if (lobbyRef.current) {
-        getSupabase().removeChannel(lobbyRef.current);
-        lobbyRef.current = null;
-      }
-    };
-  }, []);
-
-  // Host: push config changes to my presence so guests see them live.
+  // Host leaves the page → the room disappears from the lobby.
   useEffect(() => {
     if (!isHost) return;
-    hostStateRef.current = { roomName, settings, status };
-    if (channelRef.current?.state === "joined") void trackPresence();
-  }, [isHost, roomName, settings, status, trackPresence]);
+    return () => withdrawRoom();
+  }, [isHost]);
 
+  const hostPresence = useMemo(
+    () => members.find((m) => m.isHost && m.id !== me?.id),
+    [members, me?.id]
+  );
   const hostGone =
-    !isHost && connected && sawHost && !hostPresence && status === "waiting";
+    !isHost && connected && sawHost && !hostPresence && config.status === "waiting";
 
   async function launchGame() {
     if (!me || launching) return;
     setLaunching(true);
     setError(null);
     try {
-      const locations = await pickLocations(settings.rounds);
+      const locations = await pickLocations(config.settings.rounds);
       const payload: StartPayload = {
         locations,
-        settings,
+        settings: config.settings,
         startAt: Date.now() + COUNTDOWN_MS,
         roster: members.map((m) => m.id),
       };
-      await channelRef.current?.send({
-        type: "broadcast",
-        event: "start",
-        payload,
-      });
+      await channelRef.current?.send({ type: "broadcast", event: "start", payload });
       setRemoteGuesses([]);
       setStart(payload);
-      setStatus("playing");
+      setConfig((c) => ({ ...c, status: "playing" }));
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to start the game");
     } finally {
@@ -216,10 +198,8 @@ export default function RoomClient() {
   function backToRoom() {
     setStart(null);
     setRemoteGuesses([]);
-    setStatus("waiting");
-    if (isHost) {
-      void channelRef.current?.send({ type: "broadcast", event: "lobby-return", payload: {} });
-    }
+    setConfig((c) => ({ ...c, status: "waiting" }));
+    // The host's config effect rebroadcasts "waiting" to everyone.
   }
 
   function copyCode() {
@@ -246,7 +226,7 @@ export default function RoomClient() {
 
   /* ---------- in game ---------- */
 
-  if (start && status === "playing") {
+  if (start && config.status === "playing") {
     const roster = members
       .filter((m) => start.roster.includes(m.id))
       .map((m) => ({ id: m.id, nick: m.nick, hue: m.hue }));
@@ -276,7 +256,7 @@ export default function RoomClient() {
 
   /* ---------- joined while a match is running ---------- */
 
-  if (status === "playing") {
+  if (config.status === "playing") {
     return (
       <Shell>
         <Notice title="Match in progress">
@@ -315,7 +295,7 @@ export default function RoomClient() {
             <div className="min-w-0">
               <p className="label-caps mb-1">Waiting room</p>
               <h1 className="truncate font-display text-3xl">
-                {roomName || "Unnamed room"}
+                {config.roomName || "Unnamed room"}
               </h1>
             </div>
             <button
@@ -363,7 +343,7 @@ export default function RoomClient() {
                 {launching ? "Charting locations…" : "Start game"}
               </button>
               <p className="mt-3 text-center text-xs text-paper-faint">
-                Everyone in the room drops into the same {settings.rounds} locations.
+                Everyone in the room drops into the same {config.settings.rounds} locations.
               </p>
             </>
           ) : (
@@ -376,23 +356,20 @@ export default function RoomClient() {
         <section className="panel h-fit p-7">
           <p className="label-caps mb-4">Match settings</p>
           {isHost ? (
-            <SettingsForm value={settings} onChange={setSettings} />
+            <SettingsForm
+              value={config.settings}
+              onChange={(s) => setConfig((c) => ({ ...c, settings: s }))}
+            />
           ) : (
             <dl className="space-y-3 text-sm">
-              <SettingRow label="Rounds" value={String(settings.rounds)} />
+              <SettingRow label="Rounds" value={String(config.settings.rounds)} />
               <SettingRow
                 label="Time per round"
-                value={settings.timerSec ? `${settings.timerSec}s` : "No limit"}
+                value={config.settings.timerSec ? `${config.settings.timerSec}s` : "No limit"}
               />
               <SettingRow
                 label="Movement"
-                value={
-                  settings.moveMode === "move"
-                    ? "Free"
-                    : settings.moveMode === "no-move"
-                      ? "No move"
-                      : "NMPZ"
-                }
+                value={config.settings.moveMode === "move" ? "Free" : "NMPZ"}
               />
             </dl>
           )}

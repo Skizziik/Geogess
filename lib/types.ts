@@ -56,12 +56,19 @@ export type StartPayload = {
   roster: string[];
 };
 
-/** What each member tracks as presence inside a room channel. */
+/**
+ * What each member tracks as presence inside a room channel.
+ * Kept static — re-tracking presence with changing payloads accumulates
+ * stale metas; mutable room state travels as `config` broadcasts instead.
+ */
 export type RoomPresence = PlayerInfo & {
   isHost: boolean;
-  /** Host-only fields so late joiners learn the room config. */
-  roomName?: string;
-  settings?: GameSettings;
-  status?: RoomStatus;
   createdAt?: number;
+};
+
+/** Mutable room state, broadcast by the host on every change. */
+export type RoomConfig = {
+  roomName: string;
+  settings: GameSettings;
+  status: RoomStatus;
 };
