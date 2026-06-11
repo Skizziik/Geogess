@@ -256,6 +256,7 @@ export default function RoomClient() {
     if (iAmPlaying) {
       return (
         <GameView
+          key={start.startAt}
           locations={start.locations}
           settings={start.settings}
           players={roster.length ? roster : [me]}
