@@ -80,29 +80,21 @@ export default function Home() {
         </div>
       </header>
 
-      <section className="relative z-10 mx-auto w-full max-w-5xl px-6 pt-16 md:grid md:grid-cols-[8.5rem_1fr] md:gap-12 md:px-10 md:pt-24">
-        <nav className="fadeup mb-10 hidden md:block md:pt-2" aria-label="Site index">
-          <p className="label-caps mb-5 text-paper-faint">Index</p>
-          <ul className="space-y-4 border-l border-line pl-4">
-            {[
-              { n: "01", label: "Solo", href: "/play" },
-              { n: "02", label: "Multiplayer", href: "/rooms" },
-              { n: "03", label: "Leaderboard", href: "/leaderboard" },
-            ].map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className="label-caps block transition-colors hover:text-brass-bright"
-                >
-                  <span className="mr-2 font-mono text-brass">{item.n}</span>
-                  {item.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </nav>
+      {/* Far-left rail, aligned with the wordmark above it. */}
+      <nav
+        className="fadeup absolute left-6 top-24 z-10 hidden md:left-10 md:block"
+        aria-label="Leaderboard"
+      >
+        <Link
+          href="/leaderboard"
+          className="label-caps flex items-center gap-2 border-l border-brass/40 pl-3 transition-colors hover:text-brass-bright"
+        >
+          <span className="font-mono text-brass">◈</span>
+          Leaderboard
+        </Link>
+      </nav>
 
-        <div>
+      <section className="relative z-10 mx-auto w-full max-w-5xl px-6 pt-16 md:px-10 md:pt-24">
         <p className="label-caps fadeup mb-5">A street-level geography game</p>
         <h1
           className="fadeup max-w-3xl font-display text-6xl leading-[0.95] tracking-tight md:text-8xl"
@@ -149,7 +141,6 @@ export default function Home() {
             </span>
             <span className="label-caps mt-6 text-brass">enter lobby →</span>
           </Link>
-        </div>
         </div>
       </section>
 
