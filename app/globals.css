@@ -252,3 +252,10 @@ body {
 .gm-style .gm-style-cc {
   opacity: 0.4;
 }
+
+/* Leaflet shows a grab hand by default — use a crosshair for pin placement. */
+.leaflet-container,
+.leaflet-container.leaflet-grab,
+.leaflet-dragging .leaflet-container.leaflet-grab {
+  cursor: crosshair;
+}
