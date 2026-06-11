@@ -49,4 +49,16 @@ export type StartPayload = {
   settings: GameSettings;
   /** Epoch ms when round 1 opens (gives everyone a synced countdown). */
   startAt: number;
+  /** Player ids that are part of this match (late joiners spectate). */
+  roster: string[];
+};
+
+/** What each member tracks as presence inside a room channel. */
+export type RoomPresence = PlayerInfo & {
+  isHost: boolean;
+  /** Host-only fields so late joiners learn the room config. */
+  roomName?: string;
+  settings?: GameSettings;
+  status?: RoomStatus;
+  createdAt?: number;
 };
