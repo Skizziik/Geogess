@@ -22,8 +22,14 @@ export default function ResultMap({ actual, markers }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<LeafletMap | null>(null);
   const overlaysRef = useRef<Layer[]>([]);
+  const sigRef = useRef("");
 
   useEffect(() => {
+    // Redraw only when the content really changed — parent re-renders
+    // (e.g. countdown ticks) must not reset the user's pan/zoom.
+    const sig = JSON.stringify({ actual, markers });
+    if (sig === sigRef.current) return;
+    sigRef.current = sig;
     let cancelled = false;
     void import("leaflet").then(({ default: L }) => {
       if (cancelled || !containerRef.current) return;

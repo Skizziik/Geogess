@@ -184,6 +184,17 @@ export default function GameView({
 
   const guessedCount = players.filter((p) => guessFor(p.id, round)).length;
 
+  // Stable reference across countdown ticks so the result map doesn't
+  // redraw (and reset its viewport) 4 times a second.
+  const resultMarkers = useMemo(
+    () =>
+      players.map((p) => {
+        const g = guessFor(p.id, round);
+        return { point: g?.point ?? null, nick: p.nick, hue: p.hue };
+      }),
+    [players, guessFor, round]
+  );
+
   /* ---------- intro ---------- */
   if (phase === "intro" && startAt) {
     void tick;
@@ -273,10 +284,6 @@ export default function GameView({
   if (phase === "result") {
     void tick;
     const actual = locations[round];
-    const markers = players.map((p) => {
-      const g = guessFor(p.id, round);
-      return { point: g?.point ?? null, nick: p.nick, hue: p.hue };
-    });
     const mine = guessFor(me.id, round);
     const secondsLeft = resultEndsRef.current
       ? Math.max(0, Math.ceil((resultEndsRef.current - Date.now()) / 1000))
@@ -284,7 +291,7 @@ export default function GameView({
 
     return (
       <div className="fixed inset-0 z-40 bg-ink-950">
-        <ResultMap actual={actual} markers={markers} />
+        <ResultMap actual={actual} markers={resultMarkers} />
 
         <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-4">
           <div className="panel-raised px-6 py-2.5 text-center">
