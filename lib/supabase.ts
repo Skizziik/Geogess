@@ -2,11 +2,19 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 let client: SupabaseClient | null = null;
 
-export function multiplayerConfigured(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+/**
+ * Accept both key formats: the legacy anon JWT and the new publishable key
+ * (`sb_publishable_…`) that the Vercel marketplace integration injects.
+ */
+function publicKey(): string | undefined {
+  return (
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
   );
+}
+
+export function multiplayerConfigured(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL && publicKey());
 }
 
 /**
@@ -16,7 +24,7 @@ export function multiplayerConfigured(): boolean {
 export function getSupabase(): SupabaseClient {
   if (!client) {
     const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    const key = publicKey();
     if (!url || !key) {
       throw new Error("Supabase env vars are not configured");
     }
