@@ -102,5 +102,7 @@ export default function ResultMap({ actual, markers }: Props) {
     };
   }, []);
 
-  return <div ref={containerRef} className="absolute inset-0 bg-ink-900" />;
+  // z-0 starts a stacking context so Leaflet's internal z-indexes (up to
+  // ~1000) can't paint over sibling UI panels.
+  return <div ref={containerRef} className="absolute inset-0 z-0 bg-ink-900" />;
 }

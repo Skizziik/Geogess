@@ -286,7 +286,7 @@ export default function GameView({
       <div className="fixed inset-0 z-40 bg-ink-950">
         <ResultMap actual={actual} markers={markers} />
 
-        <div className="pointer-events-none absolute inset-x-0 top-0 flex justify-center pt-4">
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex justify-center pt-4">
           <div className="panel-raised px-6 py-2.5 text-center">
             <p className="label-caps">
               Round {round + 1} of {settings.rounds}
@@ -322,7 +322,7 @@ export default function GameView({
           </div>
         )}
 
-        <div className="absolute inset-x-0 bottom-0 flex justify-center pb-6">
+        <div className="absolute inset-x-0 bottom-0 z-10 flex justify-center pb-6">
           <div className="panel-raised fadeup w-[min(34rem,calc(100vw-2rem))] p-6 text-center">
             {mine?.distanceKm != null ? (
               <>
